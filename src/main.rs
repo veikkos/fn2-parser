@@ -1,29 +1,12 @@
+use crate::fn2::load_font;
+use crate::fn2::render_character;
+use crate::fn2::render_text;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::Color;
-use sdl2::rect::Point;
-use sdl2::render::Canvas;
-use sdl2::video::Window;
-use std::fs;
-use std::fs::File;
-use std::io::Read;
 use std::time::Duration;
 
-#[derive(Debug)]
-struct Line {
-    x: u8,
-    y: u8,
-    width: u8,
-}
-
-#[derive(Debug)]
-struct Character {
-    width: u32,
-    height: u32,
-    lines: Vec<Line>,
-}
-
-type Characters = Vec<Character>;
+mod fn2;
 
 pub fn main() {
     let sdl_context = sdl2::init().unwrap();
@@ -41,48 +24,7 @@ pub fn main() {
 
     let mut event_pump = sdl_context.event_pump().unwrap();
 
-    let data = get_file_as_byte_vec("./assets/TETRIS.FN2");
-    let size = data.len();
-    assert_eq!(size % 8, 0);
-
-    println!("File size: {} bytes", size);
-    let mut characters: Characters = Vec::new();
-    let mut offset: usize = 0x027D;
-    let number_of_chars_to_parse = 92;
-    'parsing: loop {
-        let width = u32::from_le_bytes(data[offset..offset + 4].try_into().unwrap());
-        offset += 4;
-        let height = u32::from_le_bytes(data[offset..offset + 4].try_into().unwrap());
-        offset += 4;
-        let color_bytes = u32::from_le_bytes(data[offset..offset + 4].try_into().unwrap());
-        offset += 4;
-        let line_bytes = u32::from_le_bytes(data[offset..offset + 4].try_into().unwrap());
-        offset += 4;
-        offset += color_bytes as usize;
-
-        let mut lines: Vec<Line> = Vec::new();
-        for _line in 0..(line_bytes / 3) {
-            let line = Line {
-                x: data[offset],
-                y: data[offset + 1],
-                width: data[offset + 2],
-            };
-            if line.width > 0 {
-                lines.push(line);
-            }
-            offset += 3;
-        }
-
-        characters.push(Character {
-            width,
-            height,
-            lines,
-        });
-
-        if characters.len() == number_of_chars_to_parse {
-            break 'parsing;
-        }
-    }
+    let font = load_font("./assets/TETRIS.FN2");
 
     'running: loop {
         for event in event_pump.poll_iter() {
@@ -104,8 +46,8 @@ pub fn main() {
         let mut x_offset = 0;
         let mut y_offset = 0;
 
-        for c in 0..characters.len() {
-            let character_width = render_character(&mut canvas, &characters, c, x_offset, y_offset);
+        for c in 0..font.len() {
+            let character_width = render_character(&mut canvas, &font, c, x_offset, y_offset);
             x_offset += character_width;
 
             if x_offset > 100 {
@@ -114,89 +56,9 @@ pub fn main() {
             }
         }
 
-        render_text(&mut canvas, &characters, 0, 70, "Hello World!");
+        render_text(&mut canvas, &font, 0, 70, "Hello World!");
 
         canvas.present();
         std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
     }
-}
-
-fn render_text(canvas: &mut Canvas<Window>, characters: &Characters, x: u32, y: u32, text: &str) {
-    let index_offset = 0x21;
-    let mut offset = 0;
-    for c in text.chars() {
-        let character_index: u8 = (c as u8).into();
-        if character_index < index_offset {
-            offset += 5;
-        } else {
-            offset += render_character(
-                canvas,
-                &characters,
-                (character_index - index_offset) as usize,
-                x + offset,
-                y,
-            );
-        }
-    }
-}
-
-fn render_character(
-    canvas: &mut Canvas<Window>,
-    characters: &Characters,
-    index: usize,
-    x: u32,
-    y: u32,
-) -> u32 {
-    let character = &characters[index];
-    for line in &character.lines {
-        canvas
-            .draw_line(
-                Point::new(line.x as i32 + x as i32, line.y as i32 + y as i32),
-                Point::new(
-                    line.x as i32 + x as i32 + line.width as i32 - 1,
-                    line.y as i32 + y as i32,
-                ),
-            )
-            .unwrap();
-    }
-    character.width
-}
-
-fn get_color(data: u8) -> (u8, u8, u8) {
-    let r = (((data >> 5) as u32) * 255 / 7) as u8;
-    let g = ((((data & 0x1C) >> 2) as u32) * 255 / 7) as u8;
-    let b = (((data & 0x03) as u32) * 255 / 3) as u8;
-    (r, g, b)
-}
-
-fn get_file_as_byte_vec(filename: &str) -> Vec<u8> {
-    let mut f = File::open(filename).expect("no file found");
-    let metadata = fs::metadata(filename).expect("unable to read metadata");
-    let size = metadata.len() as usize;
-    let mut buffer = vec![0; size];
-    f.read(&mut buffer).expect("buffer overflow");
-    buffer
-}
-
-#[test]
-fn color_tests() {
-    let (r, g, b) = get_color(0xFF);
-    assert_eq!(r, 255);
-    assert_eq!(g, 255);
-    assert_eq!(b, 255);
-
-    let (r, g, b) = get_color(0xE0);
-    assert_eq!(r, 255);
-    assert_eq!(g, 0);
-    assert_eq!(b, 0);
-
-    let (r, g, b) = get_color(0x1C);
-    assert_eq!(r, 0);
-    assert_eq!(g, 255);
-    assert_eq!(b, 0);
-
-    let (r, g, b) = get_color(0x03);
-    assert_eq!(r, 0);
-    assert_eq!(g, 0);
-    assert_eq!(b, 255);
 }
