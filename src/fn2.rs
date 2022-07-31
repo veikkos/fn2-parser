@@ -1,8 +1,15 @@
+use sdl2::pixels::Color;
+use sdl2::pixels::PixelFormatEnum;
 use sdl2::rect::Point;
-use sdl2::render::Canvas;
-use sdl2::video::Window;
+use sdl2::rect::Rect;
+use sdl2::render::TextureQuery;
+use sdl2::render::{Canvas, Texture, TextureCreator};
+use sdl2::video::{Window, WindowContext};
 use std::fs::{metadata, File};
 use std::io::Read;
+
+static INDEX_OFFSET: usize = 0x21;
+static SPACE_WIDTH: u8 = 5;
 
 #[derive(Debug)]
 pub struct Line {
@@ -71,23 +78,71 @@ pub fn load_font(filename: &str) -> FN2 {
     font
 }
 
-pub fn render_text(canvas: &mut Canvas<Window>, font: &FN2, x: u32, y: u32, text: &str) {
-    let index_offset = 0x21;
-    let mut offset = 0;
+fn get_text_texture_size(font: &FN2, text: &str) -> (u32, u32) {
+    let mut width = 0;
+    let mut height = 0;
+
     for c in text.chars() {
-        let character_index: u8 = (c as u8).into();
-        if character_index < index_offset {
-            offset += 5;
+        let character_index = char_to_index(c);
+        if character_index < INDEX_OFFSET {
+            width += SPACE_WIDTH as u32;
         } else {
-            offset += render_character(
-                canvas,
-                &font,
-                (character_index - index_offset) as usize,
-                x + offset,
-                y,
-            );
+            let index = (character_index - INDEX_OFFSET) as usize;
+            let character = &font[index];
+            width += character.width;
+            if character.height > height {
+                height = character.height;
+            }
         }
     }
+
+    (width, height)
+}
+
+fn char_to_index(c: char) -> usize {
+    (c as u8).into()
+}
+
+pub fn create_text_texture<'a>(
+    canvas: &mut Canvas<Window>,
+    texture_creator: &'a TextureCreator<WindowContext>,
+    font: &FN2,
+    text: &str,
+) -> Texture<'a> {
+    let (width, height) = get_text_texture_size(font, text);
+
+    let mut texture = texture_creator
+        .create_texture_target(PixelFormatEnum::RGBA8888, width, height)
+        .map_err(|e| e.to_string())
+        .unwrap();
+
+    canvas
+        .with_texture_canvas(&mut texture, |texture_canvas| {
+            let mut offset = 0;
+
+            texture_canvas.set_draw_color(Color::RGBA(0, 0, 0, 0));
+            texture_canvas.clear();
+            texture_canvas.set_draw_color(Color::RGB(255, 0, 0));
+
+            for c in text.chars() {
+                let character_index = char_to_index(c);
+                if character_index < INDEX_OFFSET {
+                    offset += SPACE_WIDTH as u32;
+                } else {
+                    offset += render_character(
+                        texture_canvas,
+                        &font,
+                        (character_index - INDEX_OFFSET) as usize,
+                        offset,
+                        0,
+                    );
+                }
+            }
+        })
+        .map_err(|e| e.to_string())
+        .unwrap();
+
+    texture
 }
 
 pub fn render_character(
@@ -110,4 +165,10 @@ pub fn render_character(
             .unwrap();
     }
     character.width
+}
+
+pub fn render_text(canvas: &mut Canvas<Window>, texture: &Texture, x: i32, y: i32) {
+    let TextureQuery { width, height, .. } = texture.query();
+    let dst = Rect::new(x, y, width, height);
+    canvas.copy(&texture, None, dst).unwrap();
 }

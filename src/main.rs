@@ -1,3 +1,4 @@
+use crate::fn2::create_text_texture;
 use crate::fn2::load_font;
 use crate::fn2::render_character;
 use crate::fn2::render_text;
@@ -22,9 +23,11 @@ pub fn main() {
     let mut canvas = window.into_canvas().build().unwrap();
     canvas.set_scale(5.0, 5.0).unwrap();
 
+    let texture_creator = canvas.texture_creator();
     let mut event_pump = sdl_context.event_pump().unwrap();
-
     let font = load_font("./assets/TETRIS.FN2");
+    let text_texture =
+        create_text_texture(&mut canvas, &texture_creator, &mut &font, "Hello World!");
 
     'running: loop {
         for event in event_pump.poll_iter() {
@@ -56,8 +59,7 @@ pub fn main() {
             }
         }
 
-        render_text(&mut canvas, &font, 0, 70, "Hello World!");
-
+        render_text(&mut canvas, &text_texture, 0, 70);
         canvas.present();
         std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
     }
