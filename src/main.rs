@@ -25,15 +25,15 @@ pub fn main() {
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
 
-    let window_w = 800;
-    let window_h = 600;
+    let window_w = 640;
+    let window_h = 480;
     let window = video_subsystem
         .window(".FN2 parser", window_w, window_h)
         .build()
         .unwrap();
 
     let mut canvas = window.into_canvas().build().unwrap();
-    canvas.set_scale(4.0, 4.0).unwrap();
+    canvas.set_scale(5.0, 5.0).unwrap();
 
     let mut event_pump = sdl_context.event_pump().unwrap();
 
@@ -43,9 +43,13 @@ pub fn main() {
 
     println!("File size: {} bytes", size);
     let mut characters: Vec<Character> = Vec::new();
-    let mut offset: usize = 0x0285;
+    let mut offset: usize = 0x027D;
     let number_of_chars_to_parse = 92;
     'parsing: loop {
+        let width = u32::from_le_bytes(data[offset..offset + 4].try_into().unwrap());
+        offset += 4;
+        let height = u32::from_le_bytes(data[offset..offset + 4].try_into().unwrap());
+        offset += 4;
         let color_bytes = u32::from_le_bytes(data[offset..offset + 4].try_into().unwrap());
         offset += 4;
         let line_bytes = u32::from_le_bytes(data[offset..offset + 4].try_into().unwrap());
@@ -65,20 +69,16 @@ pub fn main() {
             offset += 3;
         }
 
-        let width = u32::from_le_bytes(data[offset..offset + 4].try_into().unwrap());
-        offset += 4;
-        let height = u32::from_le_bytes(data[offset..offset + 4].try_into().unwrap());
-        offset += 4;
         characters.push(Character {
             width,
             height,
             lines,
         });
+
         if characters.len() == number_of_chars_to_parse {
             break 'parsing;
         }
     }
-    println!("{:?}", characters);
 
     'running: loop {
         for event in event_pump.poll_iter() {
@@ -107,15 +107,15 @@ pub fn main() {
                     .draw_line(
                         Point::new(line.x as i32 + x_offset, line.y as i32 + y_offset),
                         Point::new(
-                            line.x as i32 + x_offset + line.width as i32,
+                            line.x as i32 + x_offset + line.width as i32 - 1,
                             line.y as i32 + y_offset,
                         ),
                     )
                     .unwrap();
             }
-            x_offset += character.width as i32 + 1;
+            x_offset += character.width as i32;
 
-            if c > 0 && (c % 20) == 0 {
+            if x_offset > 100 {
                 y_offset += 10;
                 x_offset = 0;
             }
