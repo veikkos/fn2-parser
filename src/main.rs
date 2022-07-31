@@ -2,6 +2,8 @@ use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::Color;
 use sdl2::rect::Point;
+use sdl2::render::Canvas;
+use sdl2::video::Window;
 use std::fs;
 use std::fs::File;
 use std::io::Read;
@@ -20,6 +22,8 @@ struct Character {
     height: u32,
     lines: Vec<Line>,
 }
+
+type Characters = Vec<Character>;
 
 pub fn main() {
     let sdl_context = sdl2::init().unwrap();
@@ -42,7 +46,7 @@ pub fn main() {
     assert_eq!(size % 8, 0);
 
     println!("File size: {} bytes", size);
-    let mut characters: Vec<Character> = Vec::new();
+    let mut characters: Characters = Vec::new();
     let mut offset: usize = 0x027D;
     let number_of_chars_to_parse = 92;
     'parsing: loop {
@@ -101,19 +105,8 @@ pub fn main() {
         let mut y_offset = 0;
 
         for c in 0..characters.len() {
-            let character = &characters[c];
-            for line in &character.lines {
-                canvas
-                    .draw_line(
-                        Point::new(line.x as i32 + x_offset, line.y as i32 + y_offset),
-                        Point::new(
-                            line.x as i32 + x_offset + line.width as i32 - 1,
-                            line.y as i32 + y_offset,
-                        ),
-                    )
-                    .unwrap();
-            }
-            x_offset += character.width as i32;
+            let character_width = render_character(&mut canvas, &characters, c, x_offset, y_offset);
+            x_offset += character_width;
 
             if x_offset > 100 {
                 y_offset += 10;
@@ -121,9 +114,52 @@ pub fn main() {
             }
         }
 
+        render_text(&mut canvas, &characters, 0, 70, "Hello World!");
+
         canvas.present();
         std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
     }
+}
+
+fn render_text(canvas: &mut Canvas<Window>, characters: &Characters, x: u32, y: u32, text: &str) {
+    let index_offset = 0x21;
+    let mut offset = 0;
+    for c in text.chars() {
+        let character_index: u8 = (c as u8).into();
+        if character_index < index_offset {
+            offset += 5;
+        } else {
+            offset += render_character(
+                canvas,
+                &characters,
+                (character_index - index_offset) as usize,
+                x + offset,
+                y,
+            );
+        }
+    }
+}
+
+fn render_character(
+    canvas: &mut Canvas<Window>,
+    characters: &Characters,
+    index: usize,
+    x: u32,
+    y: u32,
+) -> u32 {
+    let character = &characters[index];
+    for line in &character.lines {
+        canvas
+            .draw_line(
+                Point::new(line.x as i32 + x as i32, line.y as i32 + y as i32),
+                Point::new(
+                    line.x as i32 + x as i32 + line.width as i32 - 1,
+                    line.y as i32 + y as i32,
+                ),
+            )
+            .unwrap();
+    }
+    character.width
 }
 
 fn get_color(data: u8) -> (u8, u8, u8) {
