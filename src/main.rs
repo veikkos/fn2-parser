@@ -1,5 +1,5 @@
 use sdl2::event::Event;
-use sdl2::keyboard::{Keycode, Mod};
+use sdl2::keyboard::Keycode;
 use sdl2::pixels::Color;
 use sdl2::rect::Point;
 use std::fs;
@@ -33,7 +33,7 @@ pub fn main() {
         .unwrap();
 
     let mut canvas = window.into_canvas().build().unwrap();
-    canvas.set_scale(2.0, 2.0).unwrap();
+    canvas.set_scale(4.0, 4.0).unwrap();
 
     let mut event_pump = sdl_context.event_pump().unwrap();
 
@@ -44,7 +44,7 @@ pub fn main() {
     println!("File size: {} bytes", size);
     let mut characters: Vec<Character> = Vec::new();
     let mut offset: usize = 0x0285;
-    let number_of_chars_to_parse = 40;
+    let number_of_chars_to_parse = 92;
     'parsing: loop {
         let color_bytes = u32::from_le_bytes(data[offset..offset + 4].try_into().unwrap());
         offset += 4;
@@ -54,11 +54,14 @@ pub fn main() {
 
         let mut lines: Vec<Line> = Vec::new();
         for _line in 0..(line_bytes / 3) {
-            lines.push(Line {
+            let line = Line {
                 x: data[offset],
                 y: data[offset + 1],
                 width: data[offset + 2],
-            });
+            };
+            if line.width > 0 {
+                lines.push(line);
+            }
             offset += 3;
         }
 
@@ -95,18 +98,27 @@ pub fn main() {
         canvas.clear();
         canvas.set_draw_color(Color::RGB(255, 0, 0));
         let mut x_offset = 0;
+        let mut y_offset = 0;
 
         for c in 0..characters.len() {
             let character = &characters[c];
             for line in &character.lines {
                 canvas
                     .draw_line(
-                        Point::new((line.x + x_offset) as i32, line.y as i32),
-                        Point::new((line.x + x_offset + line.width) as i32, line.y as i32),
+                        Point::new(line.x as i32 + x_offset, line.y as i32 + y_offset),
+                        Point::new(
+                            line.x as i32 + x_offset + line.width as i32,
+                            line.y as i32 + y_offset,
+                        ),
                     )
                     .unwrap();
             }
-            x_offset += character.width as u8;
+            x_offset += character.width as i32 + 1;
+
+            if c > 0 && (c % 20) == 0 {
+                y_offset += 10;
+                x_offset = 0;
+            }
         }
 
         canvas.present();
